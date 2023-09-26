@@ -1,4 +1,5 @@
 from flask import Flask
+import hashlib
 
 app = Flask(__name__)
 app_secret = "DIJNYWXSFG"

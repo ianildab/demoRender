@@ -10,4 +10,5 @@ zipp==3.10.0
 pyotp
 fyers-apiv2
 pandas-ta
+sha256
 hashlib

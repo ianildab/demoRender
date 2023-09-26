@@ -180,7 +180,5 @@ def main():
         time.sleep(60)
         
 if __name__ == '__main__':
-    
-    token = get_auth_code()
-    fyers = fyersModel.FyersModel(client_id=client_id, token=token, log_path='/tmp/')
+    main()
     app.run()

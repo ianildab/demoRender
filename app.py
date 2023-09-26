@@ -12,7 +12,7 @@ TOTP_KEY = "NRLLLUV5QNJ4M2QCG3CEJHYVR62OURPE"  # TOTP secret is generated when w
 
 APP_ID_TYPE = "2"  # Keep default as 2, It denotes web login
 APP_TYPE = "100"
-APP_ID_HASH = sha256((client_id + ":" + app_secret).encode('utf-8')).hexdigest()
+APP_ID_HASH = '0a65c9c558660b48ff9a8314661848de9c78973787fef825da490df2eb56ad15'
 
 # API endpoints
 BASE_URL = "https://api-t2.fyers.in/vagator/v2"

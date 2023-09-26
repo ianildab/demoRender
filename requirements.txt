@@ -12,3 +12,4 @@ fyers-apiv2
 pandas-ta
 sha256
 requests
+datetime

@@ -1,7 +1,29 @@
 from flask import Flask
 
 app = Flask(__name__)
+app_secret = "DIJNYWXSFG"
+redirect_uri = "https://trade.fyers.in/api-login/redirect-uri/index.html"
+fyers_id = "XD18596"
+pin = "7751"
+client_id = "X4LLCSVYTL-100"
+app_id = "X4LLCSVYTL"
+TOTP_KEY = "NRLLLUV5QNJ4M2QCG3CEJHYVR62OURPE"  # TOTP secret is generated when we enable 2Factor TOTP from myaccount portal
 
+APP_ID_TYPE = "2"  # Keep default as 2, It denotes web login
+APP_TYPE = "100"
+APP_ID_HASH = sha256((client_id + ":" + app_secret).encode('utf-8')).hexdigest()
+
+# API endpoints
+BASE_URL = "https://api-t2.fyers.in/vagator/v2"
+BASE_URL_2 = "https://api.fyers.in/api/v2"
+URL_SEND_LOGIN_OTP = BASE_URL + "/send_login_otp"
+URL_VERIFY_TOTP = BASE_URL + "/verify_otp"
+URL_VERIFY_PIN = BASE_URL + "/verify_pin"
+URL_TOKEN = BASE_URL_2 + "/token"
+URL_VALIDATE_AUTH_CODE = BASE_URL_2 + "/validate-authcode"
+
+SUCCESS = 1
+ERROR = -1
 @app.route('/')
 def send_login_otp(fy_id, app_id):
     try:
@@ -191,29 +213,7 @@ def get_auth_code():
     print(f"access_token - {access_token}")
     return access_token
 if __name__ == '__main__':
-    app_secret = "DIJNYWXSFG"
-    redirect_uri = "https://trade.fyers.in/api-login/redirect-uri/index.html"
-    fyers_id = "XD18596"
-    pin = "7751"
-    client_id = "X4LLCSVYTL-100"
-    app_id = "X4LLCSVYTL"
-    TOTP_KEY = "NRLLLUV5QNJ4M2QCG3CEJHYVR62OURPE"  # TOTP secret is generated when we enable 2Factor TOTP from myaccount portal
     
-    APP_ID_TYPE = "2"  # Keep default as 2, It denotes web login
-    APP_TYPE = "100"
-    APP_ID_HASH = sha256((client_id + ":" + app_secret).encode('utf-8')).hexdigest()
-    
-    # API endpoints
-    BASE_URL = "https://api-t2.fyers.in/vagator/v2"
-    BASE_URL_2 = "https://api.fyers.in/api/v2"
-    URL_SEND_LOGIN_OTP = BASE_URL + "/send_login_otp"
-    URL_VERIFY_TOTP = BASE_URL + "/verify_otp"
-    URL_VERIFY_PIN = BASE_URL + "/verify_pin"
-    URL_TOKEN = BASE_URL_2 + "/token"
-    URL_VALIDATE_AUTH_CODE = BASE_URL_2 + "/validate-authcode"
-    
-    SUCCESS = 1
-    ERROR = -1
     token = get_auth_code()
     fyers = fyersModel.FyersModel(client_id=client_id, token=token, log_path='/tmp/')
     app.run()

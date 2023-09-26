@@ -12,3 +12,6 @@ fyers-apiv2
 pandas-ta
 sha256
 hashlib
+pycryptodome
+urllib
+requests

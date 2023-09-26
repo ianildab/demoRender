@@ -26,193 +26,158 @@ URL_VALIDATE_AUTH_CODE = BASE_URL_2 + "/validate-authcode"
 SUCCESS = 1
 ERROR = -1
 @app.route('/')
-def send_login_otp(fy_id, app_id):
-    try:
-        payload = {
-            "fy_id": fy_id,
-            "app_id": app_id
-        }
+def getTime():
+    return datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-        result_string = requests.post(url=URL_SEND_LOGIN_OTP, json=payload)
-        if result_string.status_code != 200:
-            return [ERROR, result_string.text]
+def maAlgorithm():
+    #Identify ATM Strike 
+    SPOT_SYMBOL='NSE:NIFTYBANK-INDEX'
+    SYMBOL={'symbols':SPOT_SYMBOL}
+    LAST_PRICE=fyers.quotes(SYMBOL)['d'][0]['v']['lp']
+    ATM_STRIKE=100*round(LAST_PRICE/100)
+    print('#ATM_STRIKE :'+str(ATM_STRIKE) + ' #Time : ' +getTime())
+    #Required Variables
+    EXCHANGE = "NSE"
+    QUANTITY = int(15)
+    TIMEFRAME = "5"
+    #FROM_DATE = "2023-07-01"
+    TODAY = datetime.datetime.now().strftime('%Y-%m-%d') #"2022-03-14"
+    BANKNIFTY = 'BANKNIFTY'
+    #DATE_STRIKE = str('23920')
+    DATE_STRIKE = str('23SEP')
+    CE = 'CE'
+    PE = 'PE'
+    #BANKNIFTY23JUN43700CE - Monthly expiry format
+    # 23622 - weekly expiry format
+    CE_STRIKE = BANKNIFTY+DATE_STRIKE+str(ATM_STRIKE)+CE
+    PE_STRIKE = BANKNIFTY+DATE_STRIKE+str(ATM_STRIKE)+PE
+    #print(CE_STRIKE + PE_STRIKE)
 
-        result = json.loads(result_string.text)
-        request_key = result["request_key"]
+    script_list = [CE_STRIKE,PE_STRIKE]
 
-        return [SUCCESS, request_key]
+    exchange = "NSE"
+    quantity = int(100)
+    timeframe = "5"
+    from_date = "2023-09-01"
+    today = datetime.datetime.now().strftime('%Y-%m-%d') #"2022-03-14"
+    buy_traded_stock = []
+    sell_traded_stock = []
+    for script in script_list:
+        data = {"symbol":f"{exchange}:{script}","resolution": timeframe,"date_format":"1","range_from": from_date,"range_to": today,"cont_flag":"0"}
+        try:
+            #hist_data = fyers.history(data)
+            nx = fyers.history(data)
+        except Exception as e:
+            raise e
+        #data = {"symbol":f"{exchange}:{script}","resolution":"5","date_format":"1","range_from":"2023-06-16","range_to":"2023-06-16","cont_flag":"1"}
+        #nx = fyers.history(data)
 
-    except Exception as e:
-        return [ERROR, e]
+        cols = ['datetime','open','high','low','close','volume']
+        df = pd.DataFrame.from_dict(nx['candles'])
+        #print(df)
+        df.columns = cols
+        df['datetime'] = pd.to_datetime(df['datetime'],unit = "s")
+        df['datetime'] = df['datetime'].dt.tz_localize('utc').dt.tz_convert('Asia/Kolkata')
+        df['datetime'] = df['datetime'].dt.tz_localize(None)
+        df = df.set_index('datetime')
+        
+        df['VWAP'] = ta.vwap(df.high,df.low,df.close,df.volume)
+        df['CCI'] = ta.cci(df.high,df.low,df.close,20,0.015,'false',0)
+        df['RSI'] = ta.rsi(df.close,14,100,'false',1,0)
+        df.dropna(inplace=True)
+        if not df.empty:
+            #print(df)
+            if ((df.close[-1] > df.VWAP.values[-1]) and (df.close[-2] < df.VWAP.values[-2]) and (df.CCI.values[-1] > 100) and (df.RSI.values[-1] > 45)) :
+            #if ((df.CCI.values[-1] > 0) and (df.RSI.values[-1] > 0)) :
+                print(script + ' '+str(datetime.datetime.now()))
+                message = 'VWAP and CCI>100 and RSI>45 : '+script
+                url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={chat_id}&text={message}"
+                #requests.get(url).json()
+                
+                tsl_point = 20
+                order_id = {
+                  "symbol":f"{EXCHANGE}:{script}",
+                  "qty":90,
+                  "type":2,
+                  "side":1,
+                  "productType":"MARGIN",
+                  "limitPrice":0,
+                  "stopPrice":0,
+                  "validity":"DAY",
+                  "disclosedQty":0,
+                  "offlineOrder":"False",
+                  "stopLoss":0,
+                  "takeProfit":0
+                }
+                order_executed_id = fyers.place_order(order_id)
+                
+                SPOT_SYMBOL=f'NSE:{script}'
+                SYMBOL={'symbols':SPOT_SYMBOL}
+                LAST_PRICE=fyers.quotes(SYMBOL)['d'][0]['v']['lp']
+                print('In maAlgorithm : order_executed:')
+                
+                trailing_stop_loss_live(script, LAST_PRICE,tsl_point,True)
+                
+                notify2.init("Test")
+                notice = notify2.Notification(script, message)
+                notice.show()
+                
+                message1 = 'Order done for : '+script
+                url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={chat_id}&text={message1}"
+                requests.get(url).json()
+                
+                
+def trailing_stop_loss_live(script, buy_price,tsl_point,orderExecuted):
+    new_tsl_price = buy_price - tsl_point
+    print('new_tsl_price : '+str(new_tsl_price))
+    print(buy_price)
+    print('Buy Price : '+str(buy_price))
+    print('order_executed_id : '+order_executed_id['id'])
+            
+    while orderExecuted:
+        SPOT_SYMBOL=f'NSE:{script}'
+        SYMBOL={'symbols':SPOT_SYMBOL}
+        LAST_PRICE=fyers.quotes(SYMBOL)['d'][0]['v']['lp']
+        
+        old_ltp = new_tsl_price + tsl_point
 
-
-def generate_totp(secret):
-    try:
-        generated_totp = pyotp.TOTP(secret).now()
-        return [SUCCESS, generated_totp]
-
-    except Exception as e:
-        return [ERROR, e]
-
-
-def verify_totp(request_key, totp):
-    try:
-        payload = {
-            "request_key": request_key,
-            "otp": totp
-        }
-
-        result_string = requests.post(url=URL_VERIFY_TOTP, json=payload)
-        if result_string.status_code != 200:
-            return [ERROR, result_string.text]
-
-        result = json.loads(result_string.text)
-        request_key = result["request_key"]
-
-        return [SUCCESS, request_key]
-
-    except Exception as e:
-        return [ERROR, e]
-
-
-def verify_PIN(request_key, pin):
-    try:
-        payload = {
-            "request_key": request_key,
-            "identity_type": "pin",
-            "identifier": pin
-        }
-
-        result_string = requests.post(url=URL_VERIFY_PIN, json=payload)
-        if result_string.status_code != 200:
-            return [ERROR, result_string.text]
-
-        result = json.loads(result_string.text)
-        access_token = result["data"]["access_token"]
-
-        return [SUCCESS, access_token]
-
-    except Exception as e:
-        return [ERROR, e]
-
-
-def token(fy_id, app_id, redirect_uri, app_type, access_token):
-    try:
-        payload = {
-            "fyers_id": fy_id,
-            "app_id": app_id,
-            "redirect_uri": redirect_uri,
-            "appType": app_type,
-            "code_challenge": "",
-            "state": "sample_state",
-            "scope": "",
-            "nonce": "",
-            "response_type": "code",
-            "create_cookie": True
-        }
-        headers = {'Authorization': f'Bearer {access_token}'}
-
-        result_string = requests.post(
-            url=URL_TOKEN, json=payload, headers=headers
-        )
-
-        if result_string.status_code != 308:
-            return [ERROR, result_string.text]
-
-        result = json.loads(result_string.text)
-        url = result["Url"]
-        auth_code = parse.parse_qs(parse.urlparse(url).query)['auth_code'][0]
-
-        return [SUCCESS, auth_code]
-
-    except Exception as e:
-        return [ERROR, e]
-
-
-def validate_authcode(app_id_hash, auth_code):
-    try:
-        payload = {
-            "grant_type": "authorization_code",
-            "appIdHash": app_id_hash,
-            "code": auth_code,
-        }
-
-        result_string = requests.post(url=URL_VALIDATE_AUTH_CODE, json=payload)
-        if result_string.status_code != 200:
-            return [ERROR, result_string.text]
-
-        result = json.loads(result_string.text)
-        access_token = result["access_token"]
-
-        return [SUCCESS, access_token]
-
-    except Exception as e:
-        return [ERROR, e]
+        if(LAST_PRICE > old_ltp):
+            old_ltp = LAST_PRICE
+            new_tsl_price = old_ltp - tsl_point
+            print('New Trailing SL : '+str(new_tsl_price))
+            message1 = 'New trailing stoploss for : '+script+ ' is '+ str(new_tsl_price)
+            url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={chat_id}&text={message1}"
+            requests.get(url).json()
 
 
-def get_auth_code():
+        if(new_tsl_price > LAST_PRICE):
+            scrip = SPOT_SYMBOL+'-MARGIN'
+            print(fyers.exit_positions({"id":scrip}))
+            orderExecuted = False
+            print('Trailing Stoploss Hit :')
+            
+        time.sleep(1)    
+        
 
-    # Step 1 - Retrieve request_key from send_login_otp API
-    send_otp_result = send_login_otp(fy_id=fyers_id, app_id=APP_ID_TYPE)
-    if send_otp_result[0] != SUCCESS:
-        print(f"send_login_otp failure - {send_otp_result[1]}")
-        sys.exit()
-    else:
-        print("send_login_otp success")
 
-    # Step 2 - Generate totp
-    generate_totp_result = generate_totp(secret=TOTP_KEY)
-    if generate_totp_result[0] != SUCCESS:
-        print(f"generate_totp failure - {generate_totp_result[1]}")
-        sys.exit()
-    else:
-        print("generate_totp success")
+def main():
+    global fyers
+    token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJhcGkuZnllcnMuaW4iLCJpYXQiOjE2OTU3NDk2ODEsImV4cCI6MTY5NTc3NDY0MSwibmJmIjoxNjk1NzQ5NjgxLCJhdWQiOlsieDowIiwieDoxIiwieDoyIiwiZDoxIiwiZDoyIiwieDoxIiwieDowIl0sInN1YiI6ImFjY2Vzc190b2tlbiIsImF0X2hhc2giOiJnQUFBQUFCbEV4WXhwaG83d0hId3N4SWF1ek9CR0hzY2JBUnVKYkRyUkg3dTg2UUhaQ3o2MDNlVXo1UzhPVkp2cDB5dFZXMnV4OWhLYml0czliY2N3LXpfaGU3RC1HRVZaTWZEYU93amhBMy1LenlBdmxxRHpTOD0iLCJkaXNwbGF5X25hbWUiOiJESVBBTEkgQU5JTCBKQURIQVYiLCJvbXMiOiJLMSIsImhzbV9rZXkiOiJkYTgwYjAzZjE3ZWRiMjEzNmE0MTdhZDlhNjc3YjQ1NTk2ODJjZGY3ZWYwOTc1ZDY0NDAwYTdlMSIsImZ5X2lkIjoiWEQxODU5NiIsImFwcFR5cGUiOjEwMCwicG9hX2ZsYWciOiJOIn0.aBNapnC_F2HkwxgdSRVIC1J5PcWhVedSSys7I0JU21E'
+    fyers = fyersModel.FyersModel(client_id=client_id, token=token, log_path='/tmp/')
+    closingtime = int(15) * 60 + int(10)
+    orderplacetime = int(9) * 60 + int(20)
+    timenow = (datetime.datetime.now().hour * 60 + datetime.datetime.now().minute)
+    print(f"Waiting for 9.30 AM , Time Now:{getTime()}")
 
-    # Step 3 - Verify totp and get request key from verify_otp API
-    request_key = send_otp_result[1]
-    totp = generate_totp_result[1]
-    verify_totp_result = verify_totp(request_key=request_key, totp=totp)
-    if verify_totp_result[0] != SUCCESS:
-        print(f"verify_totp_result failure - {verify_totp_result[1]}")
-        sys.exit()
-    else:
-        print("verify_totp_result success")
-
-    # Step 4 - Verify pin and send back access token
-    request_key_2 = verify_totp_result[1]
-    verify_pin_result = verify_PIN(request_key=request_key_2, pin=pin)
-    if verify_pin_result[0] != SUCCESS:
-        print(f"verify_pin_result failure - {verify_pin_result[1]}")
-        sys.exit()
-    else:
-        print("verify_pin_result success")
-
-    # Step 5 - Get auth code for API V2 App from trade access token
-    token_result = token(
-        fy_id=fyers_id, app_id=app_id, redirect_uri=redirect_uri, app_type=APP_TYPE,
-        access_token=verify_pin_result[1]
-    )
-    if token_result[0] != SUCCESS:
-        print(f"token_result failure - {token_result[1]}")
-        sys.exit()
-    else:
-        print("token_result success")
-
-    # Step 6 - Get API V2 access token from validating auth code
-    auth_code = token_result[1]
-    validate_authcode_result = validate_authcode(
-        app_id_hash=APP_ID_HASH, auth_code=auth_code
-    )
-    if token_result[0] != SUCCESS:
-        print(f"validate_authcode failure - {validate_authcode_result[1]}")
-        sys.exit()
-    else:
-        print("validate_authcode success")
-
-    access_token = validate_authcode_result[1]
-
-    print(f"access_token - {access_token}")
-    return access_token
+    while timenow < orderplacetime:
+        time.sleep(0.2)
+        timenow = (datetime.datetime.now().hour * 60 + datetime.datetime.now().minute)
+    print(f"Ready for trading, Time Now:{getTime()}")
+    
+    while True: 
+        maAlgorithm()
+        time.sleep(60)
+        
 if __name__ == '__main__':
     
     token = get_auth_code()

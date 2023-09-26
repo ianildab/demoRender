@@ -11,5 +11,4 @@ pyotp
 fyers-apiv2
 pandas-ta
 sha256
-urllib
 requests
